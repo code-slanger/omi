@@ -1,0 +1,72 @@
+[project]
+name = "personalisation-service"
+version = "0.2.0"
+requires-python = ">=3.11"
+dependencies = [
+    # ── Core API + web ────────────────────────────────────────────────────────
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic-settings>=2.6.0",
+    "python-multipart>=0.0.18",
+    "aiofiles>=24.1.0",
+
+    # ── AI / LLMs ─────────────────────────────────────────────────────────────
+    "anthropic>=0.40.0",
+    "google-generativeai>=0.8.0",   # Gemini — long context summarization
+    "httpx>=0.27.0",                # Ollama + GitHub API
+
+    # ── Embeddings + local STT ────────────────────────────────────────────────
+    "faster-whisper>=1.0.0",
+    "chromadb>=0.5.20",
+    "sentence-transformers>=3.3.0",
+    "numpy>=1.26.0",
+    "torch",
+
+    # ── Media preprocessing ───────────────────────────────────────────────────
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+    "Pillow>=11.0.0",
+
+    # ── Telegram bot ──────────────────────────────────────────────────────────
+    "python-telegram-bot>=21.0",
+
+    # ── Vault watcher ─────────────────────────────────────────────────────────
+    "watchfiles>=0.21",
+
+    # ── Feed system ───────────────────────────────────────────────────────────
+    "feedparser>=6.0.0",            # RSS / Atom / Substack
+    "yt-dlp>=2024.1.0",             # YouTube monitoring
+    "duckduckgo-search>=6.0",       # Web search (no API key)
+    "PyYAML>=6.0",                  # feeds.yaml parsing
+
+    # ── Calendar integration ──────────────────────────────────────────────────
+    "caldav>=1.3.0",
+    "icalendar>=5.0.0",
+
+    # ── Digest rendering ──────────────────────────────────────────────────────
+    "markdown-it-py>=3.0.0",
+]
+
+[project.optional-dependencies]
+s3 = ["boto3>=1.35.0"]
+
+# Lock file targets only the Pi (Linux aarch64) — no Windows/macOS variants
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'aarch64'"]
+
+# Force CPU-only torch — avoids pulling the full NVIDIA CUDA stack (~3GB)
+# which torch defaults to on Linux. The Pi has no GPU so CUDA is useless.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/personalisation"]

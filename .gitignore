@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+uv.lock
+
+# Environment (never commit real .env)
+.env
+**/.env
+
+# Claude Code local settings
+.claude/
+
+# Editor / OS
+.DS_Store
+.cursor/
+*.swp
+
+# Captured media
+omi_capture_*.jpg
+
+# Nested git repos
+omi-fw/

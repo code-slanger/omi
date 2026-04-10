@@ -1,0 +1,11 @@
+[project]
+name = "omi-ble"
+version = "0.1.0"
+description = "BLE tools for Omi glasses — runs on Pi 5 (built-in Bluetooth)"
+requires-python = ">=3.12"
+dependencies = [
+    "bleak>=0.22.0",
+    "numpy>=1.26.0",
+    "opuslib>=3.0.1",
+    "httpx>=0.27.0",
+]

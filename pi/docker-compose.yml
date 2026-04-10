@@ -1,0 +1,36 @@
+services:
+  nano-claw:
+    build:
+      context: ./service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./service/.env
+    volumes:
+      - /home/lucho/omi/data:/app/data        # uploads, profiles, feed state, generated outputs
+      - /home/lucho/obsidian:/app/vault        # Obsidian vault (read+write)
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  # ── Ollama — local LLM server (optional) ──────────────────────────────────
+  # Set OLLAMA_BASE_URL=http://ollama:11434 in service/.env to enable.
+  # To pull a model after first start:
+  #   docker compose exec ollama ollama pull llama3.2
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - /home/lucho/ollama/models:/root/.ollama   # persist model weights
+    restart: unless-stopped
+    profiles:
+      - ollama   # only starts with: docker compose --profile ollama up
