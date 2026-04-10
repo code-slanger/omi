@@ -33,6 +33,8 @@ SYSTEM_PROMPT = """\
 You are a cognitive assistant with access to the user's knowledge base, Obsidian vault, \
 email, calendar, and the web.
 
+Always respond in English, regardless of the language of the input.
+
 Be direct and practical. Do not use a creative or stylised voice.
 
 Available capabilities:
@@ -323,7 +325,7 @@ def _list_recent_notes(n: int) -> str:
 
 def _search_web(query: str, max_results: int) -> str:
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
         if not results:

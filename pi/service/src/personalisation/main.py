@@ -332,7 +332,10 @@ async def omi_audio_webhook(
     """
     import wave
 
-    pcm_bytes = await request.body()
+    try:
+        pcm_bytes = await request.body()
+    except Exception:
+        return {"status": "ignored", "reason": "client disconnected"}
     if not pcm_bytes:
         return {"status": "ignored", "reason": "empty body"}
 
@@ -356,7 +359,7 @@ async def omi_audio_webhook(
         tmp_path = tmp.name
 
     try:
-        segments, _ = get_whisper_model().transcribe(tmp_path)
+        segments, _ = get_whisper_model().transcribe(tmp_path, language="en")
         transcript = " ".join(s.text.strip() for s in segments).strip()
     finally:
         os.unlink(tmp_path)
@@ -417,7 +420,10 @@ async def omi_photo_webhook(user_id: str, request: Request):
 
     Firmware setting: PI_SERVICE_URL / PI_USER_ID in config.h
     """
-    jpeg_bytes = await request.body()
+    try:
+        jpeg_bytes = await request.body()
+    except Exception:
+        return {"status": "ignored", "reason": "client disconnected"}
     if len(jpeg_bytes) < 100:
         return {"status": "ignored", "reason": "too small"}
 

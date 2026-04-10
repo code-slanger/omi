@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     omi_min_words: int = 10
     # Wake word — transcript must contain this (case-insensitive) to be processed.
     # Set to empty string to process everything (not recommended for always-on use).
-    omi_wake_word: str = "man like mitch"
+    omi_wake_word: str = "hey man"
 
     # Nano Claw — cognitive agent (Haiku + tools)
     nano_claw_model: str = "claude-haiku-4-5-20251001"

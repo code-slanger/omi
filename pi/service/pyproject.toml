@@ -36,7 +36,7 @@ dependencies = [
     # ── Feed system ───────────────────────────────────────────────────────────
     "feedparser>=6.0.0",            # RSS / Atom / Substack
     "yt-dlp>=2024.1.0",             # YouTube monitoring
-    "duckduckgo-search>=6.0",       # Web search (no API key)
+    "ddgs>=0.1",                     # Web search (no API key, replaces duckduckgo-search)
     "PyYAML>=6.0",                  # feeds.yaml parsing
 
     # ── Calendar integration ──────────────────────────────────────────────────
