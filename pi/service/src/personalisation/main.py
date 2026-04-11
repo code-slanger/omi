@@ -378,6 +378,28 @@ async def omi_audio_webhook(
         import re
         clean = re.sub(re.escape(settings.omi_wake_word), "", transcript, flags=re.IGNORECASE).strip(" ,.")
 
+    # Check for direct vault commands before sending to AI
+    from .nano_claw.commands import match_voice_command, run as run_command
+    cmd = match_voice_command(clean)
+    if cmd:
+        text = run_command(cmd)
+        if settings.telegram_bot_token and settings.telegram_chat_id:
+            try:
+                from telegram import Bot
+                bot = Bot(token=settings.telegram_bot_token)
+                await bot.send_message(
+                    chat_id=settings.telegram_chat_id,
+                    text=text,
+                )
+            except Exception as e:
+                logger.warning("Telegram send failed: %s", e)
+        return {
+            "status": "command",
+            "command": cmd,
+            "transcript": transcript,
+            "text": text,
+        }
+
     from .nano_claw.router import route
     text, mode = await route(user_id, clean)
     generation_id = str(uuid.uuid4())

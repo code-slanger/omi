@@ -158,6 +158,23 @@ _TOOLS = [
             "required": ["title", "start_iso", "end_iso"],
         },
     },
+    {
+        "name": "create_task",
+        "description": (
+            "Create a task or reminder in the Obsidian vault using Tasks plugin format. "
+            "Use for reminders, todos, and follow-ups. "
+            "If the user says 'remind me to X on Friday' or 'add a task to Y', use this tool."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "The task description"},
+                "due_date": {"type": "string", "description": "Due date in YYYY-MM-DD format (optional)"},
+                "note": {"type": "string", "description": "Which note to append to (default: Tasks)"},
+            },
+            "required": ["task"],
+        },
+    },
 ]
 
 
@@ -264,6 +281,13 @@ async def _run_tool(user_id: str, name: str, inputs: dict) -> str:
             description=inputs.get("description", ""),
         )
 
+    if name == "create_task":
+        return _create_task(
+            task=inputs["task"],
+            due_date=inputs.get("due_date", ""),
+            note=inputs.get("note", "Tasks"),
+        )
+
     return f"Unknown tool: {name}"
 
 
@@ -321,6 +345,27 @@ def _list_recent_notes(n: int) -> str:
         f"- {note.stem} ({datetime.fromtimestamp(note.stat().st_mtime).strftime('%Y-%m-%d %H:%M')})"
         for note in notes
     )
+
+
+def _create_task(task: str, due_date: str, note: str) -> str:
+    if not settings.obsidian_vault_path:
+        return "Error: OBSIDIAN_VAULT_PATH is not configured."
+
+    vault = Path(settings.obsidian_vault_path)
+    if not vault.exists():
+        return "Vault not found."
+
+    due_str = f" 📅 {due_date}" if due_date else ""
+    task_line = f"- [ ] {task}{due_str}\n"
+
+    note_path = vault / f"{note}.md"
+    if note_path.exists():
+        with note_path.open("a", encoding="utf-8") as f:
+            f.write(task_line)
+    else:
+        note_path.write_text(f"# {note}\n\n{task_line}", encoding="utf-8")
+
+    return f"Task created: {task}{due_str}"
 
 
 def _search_web(query: str, max_results: int) -> str:

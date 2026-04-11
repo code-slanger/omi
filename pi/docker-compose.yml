@@ -21,6 +21,21 @@ services:
       retries: 3
       start_period: 90s
 
+  # ── Radicale — self-hosted CalDAV/CardDAV calendar server ─────────────────
+  radicale:
+    image: tomsquest/docker-radicale:latest
+    ports:
+      - "5232:5232"
+    volumes:
+      - /home/lucho/radicale/data:/data            # calendar data
+      - /home/lucho/radicale/config:/config        # radicale config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5232/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # ── Ollama — local LLM server (optional) ──────────────────────────────────
   # Set OLLAMA_BASE_URL=http://ollama:11434 in service/.env to enable.
   # To pull a model after first start:

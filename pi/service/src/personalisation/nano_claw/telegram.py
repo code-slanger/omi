@@ -182,6 +182,10 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "*Creative (Alchemist OS — writes in your voice):*\n"
         "`/create <prompt>` or `/write <prompt>`\n\n"
 
+        "*Quick reads (no AI — instant):*\n"
+        "`/todos` — open tasks from Tasks.md\n"
+        "`/shopping` — shopping list from Shopping.md\n\n"
+
         "*Cognitive (Nano Claw — practical tasks):*\n"
         "`/note <content>` — save note to Obsidian\n"
         "`/todo <task>` — create task note\n"
@@ -232,6 +236,18 @@ async def cmd_todo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     from . import agent
     result = await agent.respond(settings.nano_claw_user_id, f"Create a todo note: {task}")
     await _reply(update, result)
+
+
+async def cmd_todos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List open tasks from Tasks.md — no AI."""
+    from .commands import run as run_command
+    await _reply(update, run_command("todos"))
+
+
+async def cmd_shopping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List shopping list from Shopping.md — no AI."""
+    from .commands import run as run_command
+    await _reply(update, run_command("shopping"))
 
 
 async def cmd_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -340,6 +356,8 @@ def build_app() -> Application:
     app.add_handler(CommandHandler(["create", "write", "alchemist"], cmd_create))
     app.add_handler(CommandHandler("note", cmd_note))
     app.add_handler(CommandHandler("todo", cmd_todo))
+    app.add_handler(CommandHandler("todos", cmd_todos))
+    app.add_handler(CommandHandler("shopping", cmd_shopping))
     app.add_handler(CommandHandler("email", cmd_email))
     app.add_handler(CommandHandler("research", cmd_research))
     app.add_handler(CommandHandler("draft", cmd_draft))
