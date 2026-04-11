@@ -13,6 +13,19 @@ from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+# Suppress noisy third-party loggers
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+logging.getLogger("torch").setLevel(logging.ERROR)
+
+# Filter health check spam from uvicorn access logs
+class _HealthFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "GET /health" not in record.getMessage()
+
+logging.getLogger("uvicorn.access").addFilter(_HealthFilter())
+
 from .config import settings
 from .embeddings.index import add_documents, collection_count, delete_collection
 from .preprocessors import audio as audio_prep
@@ -183,6 +196,12 @@ class OmiWebhookRequest(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+def _check_webhook_secret(key: str | None) -> None:
+    """Raise 403 if webhook_secret is configured and key doesn't match."""
+    if settings.webhook_secret and key != settings.webhook_secret:
+        raise HTTPException(status_code=403, detail="Invalid webhook secret")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "writer_model": settings.generation_model, "agent_model": settings.nano_claw_model}
@@ -276,7 +295,7 @@ async def process_audio(user_id: str, file: UploadFile = File(...)):
 
 
 @app.post("/webhooks/omi/{user_id}")
-async def omi_webhook(user_id: str, req: OmiWebhookRequest):
+async def omi_webhook(user_id: str, req: OmiWebhookRequest, key: str | None = Query(default=None)):
     """
     Omi glasses webhook. Receives transcript, classifies intent, and routes to the
     appropriate agent:
@@ -285,6 +304,7 @@ async def omi_webhook(user_id: str, req: OmiWebhookRequest):
 
     Payloads shorter than OMI_MIN_WORDS are silently ignored (filters noise).
     """
+    _check_webhook_secret(key)
     transcript = req.transcript or " ".join(
         s.text.strip() for s in req.segments if s.text.strip()
     )
@@ -320,6 +340,7 @@ async def omi_audio_webhook(
     user_id: str,
     request: Request,
     sample_rate: int = Query(default=16000),
+    key: str | None = Query(default=None),
 ):
     """
     Omi raw audio bytes webhook.
@@ -330,6 +351,7 @@ async def omi_audio_webhook(
       Integration type: Audio Bytes
       Endpoint: http://192.168.0.27:8000/webhooks/omi/{user_id}/audio
     """
+    _check_webhook_secret(key)
     import wave
 
     try:
@@ -359,14 +381,19 @@ async def omi_audio_webhook(
         tmp_path = tmp.name
 
     try:
-        segments, _ = get_whisper_model().transcribe(tmp_path, language="en")
+        segments, _ = get_whisper_model().transcribe(
+            tmp_path,
+            language="en",
+            vad_filter=True,
+            condition_on_previous_text=False,
+        )
         transcript = " ".join(s.text.strip() for s in segments).strip()
     finally:
         os.unlink(tmp_path)
 
-    logger.warning("Transcript: %r (%d words)", transcript, len(transcript.split()))
+    logger.info("Transcript: %r (%d words)", transcript, len(transcript.split()))
     if not transcript or len(transcript.split()) < settings.omi_min_words:
-        logger.warning("Ignored — too short (min=%d)", settings.omi_min_words)
+        logger.debug("Ignored — too short (min=%d)", settings.omi_min_words)
         return {"status": "ignored", "reason": "transcript too short", "transcript": transcript}
 
     if settings.omi_wake_word and settings.omi_wake_word.lower() not in transcript.lower():
@@ -435,13 +462,14 @@ async def omi_audio_webhook(
 
 
 @app.post("/webhooks/omi/{user_id}/photo")
-async def omi_photo_webhook(user_id: str, request: Request):
+async def omi_photo_webhook(user_id: str, request: Request, key: str | None = Query(default=None)):
     """
     Receives a raw JPEG directly from the glasses over WiFi.
     Firmware posts here after every photo capture — no Omi app or BLE bridge required.
 
     Firmware setting: PI_SERVICE_URL / PI_USER_ID in config.h
     """
+    _check_webhook_secret(key)
     try:
         jpeg_bytes = await request.body()
     except Exception:

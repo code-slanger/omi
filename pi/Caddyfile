@@ -1,0 +1,6 @@
+:5233 {
+    redir /.well-known/caldav /lucho/ 301
+    redir /.well-known/carddav /lucho/ 301
+
+    reverse_proxy radicale:5232
+}

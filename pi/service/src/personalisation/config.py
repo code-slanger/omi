@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Alchemist OS — creative writer (Opus, adaptive thinking)
     generation_model: str = "claude-opus-4-6"
 
+    # Omi webhook — secret key required on all webhook requests
+    webhook_secret: str = ""
+
     # Omi webhook — ignore transcripts shorter than this word count (filters noise)
     omi_min_words: int = 10
     # Wake word — transcript must contain this (case-insensitive) to be processed.

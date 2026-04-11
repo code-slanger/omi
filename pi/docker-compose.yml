@@ -36,6 +36,30 @@ services:
       timeout: 5s
       retries: 3
 
+  # ── Caddy — HTTPS reverse proxy with Porkbun DNS challenge ────────────────
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    ports:
+      - "443:443"
+      - "80:80"
+    environment:
+      PORKBUN_API_KEY: pk1_34dbb9d020825f8887df575964abdceaa7d6661eaf24e09b93764eec5ee4810e
+      PORKBUN_SECRET_KEY: sk1_c0759d17bacebe3bd92938dabd9b01f2dca90db168d64d3320b178ad065a5f24
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - nano-claw
+      - radicale
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
+
   # ── Ollama — local LLM server (optional) ──────────────────────────────────
   # Set OLLAMA_BASE_URL=http://ollama:11434 in service/.env to enable.
   # To pull a model after first start:
