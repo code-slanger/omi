@@ -21,5 +21,3 @@ uv.lock
 # Captured media
 omi_capture_*.jpg
 
-# Nested git repos
-omi-fw/
