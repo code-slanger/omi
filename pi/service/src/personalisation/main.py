@@ -4,13 +4,14 @@ import logging
 import os
 import tempfile
 import uuid
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 # Suppress noisy third-party loggers
@@ -391,7 +392,7 @@ async def omi_audio_webhook(
     finally:
         os.unlink(tmp_path)
 
-    logger.info("Transcript: %r (%d words)", transcript, len(transcript.split()))
+    logger.warning("Transcript: %r (%d words)", transcript, len(transcript.split()))
     if not transcript or len(transcript.split()) < settings.omi_min_words:
         logger.debug("Ignored — too short (min=%d)", settings.omi_min_words)
         return {"status": "ignored", "reason": "transcript too short", "transcript": transcript}
@@ -480,7 +481,7 @@ async def omi_photo_webhook(user_id: str, request: Request, key: str | None = Qu
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"photo_{ts}.jpg"
     await save_upload(user_id, "image", filename, jpeg_bytes)
-    logger.info("Photo saved: %s (%d bytes)", filename, len(jpeg_bytes))
+    logger.warning("Photo saved: %s (%d bytes)", filename, len(jpeg_bytes))
 
     return {"status": "saved", "filename": filename}
 

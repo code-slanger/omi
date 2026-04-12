@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # omi.sh — Pi utility commands
-# Usage: ./omi.sh photos | logs | logs-live
+# Usage: ./omi.sh photos | logs | logs-live | audio
 
 PI="lucho@192.168.0.27"
 LOCAL_DIR="/Users/mitchumbailey/operational-lair/omi"
@@ -21,8 +21,12 @@ case "$1" in
     echo "Streaming live transcription logs (Ctrl+C to stop)..."
     ssh "$PI" "docker logs -f $CONTAINER 2>&1 | grep --line-buffered 'Transcript\|Ignored'"
     ;;
+  audio)
+    echo "Last 50 audio transcripts (non-empty):"
+    ssh "$PI" "docker logs $CONTAINER 2>&1 | grep 'Transcript:' | grep -v \"''\"" | tail -50
+    ;;
   *)
-    echo "Usage: $0 {photos|logs|logs-live}"
+    echo "Usage: $0 {photos|logs|logs-live|audio}"
     exit 1
     ;;
 esac
