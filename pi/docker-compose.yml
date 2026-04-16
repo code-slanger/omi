@@ -9,7 +9,7 @@ services:
       - ./service/.env
     volumes:
       - /home/lucho/omi/data:/app/data        # uploads, profiles, feed state, generated outputs
-      - /home/lucho/obsidian:/app/vault        # Obsidian vault (read+write)
+      - /home/lucho/vault:/app/vault            # Obsidian vault (read+write)
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -20,6 +20,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+
+  # ── Corpus UI — ingest and manage the personal media corpus ─────────────
+  corpus-ui:
+    build:
+      context: ..                          # omi/ root — corpus/ and corpus-ui/ both in scope
+      dockerfile: corpus-ui/Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./service/.env                     # shares same .env as nano-claw
+    environment:
+      - DATA_DIR=/app/data
+    volumes:
+      - /home/lucho/omi/data:/app/data     # same data volume as nano-claw
+    restart: unless-stopped
 
   # ── Radicale — self-hosted CalDAV/CardDAV calendar server ─────────────────
   radicale:
@@ -44,11 +59,9 @@ services:
     ports:
       - "443:443"
       - "80:80"
-    environment:
-      PORKBUN_API_KEY: pk1_34dbb9d020825f8887df575964abdceaa7d6661eaf24e09b93764eec5ee4810e
-      PORKBUN_SECRET_KEY: sk1_c0759d17bacebe3bd92938dabd9b01f2dca90db168d64d3320b178ad065a5f24
+    env_file:
+      - ./service/.env
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -60,16 +73,16 @@ volumes:
   caddy_data:
   caddy_config:
 
-  # ── Ollama — local LLM server (optional) ──────────────────────────────────
-  # Set OLLAMA_BASE_URL=http://ollama:11434 in service/.env to enable.
-  # To pull a model after first start:
-  #   docker compose exec ollama ollama pull llama3.2
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - /home/lucho/ollama/models:/root/.ollama   # persist model weights
-    restart: unless-stopped
-    profiles:
-      - ollama   # only starts with: docker compose --profile ollama up
+# ── Ollama — local LLM server (optional) ──────────────────────────────────
+# Set OLLAMA_BASE_URL=http://ollama:11434 in service/.env to enable.
+# To pull a model after first start:
+#   docker compose exec ollama ollama pull llama3.2
+#  ollama:
+#    image: ollama/ollama:latest
+#    ports:
+#      - "11434:11434"
+#    volumes:
+#      - /home/lucho/ollama/models:/root/.ollama
+#    restart: unless-stopped
+#    profiles:
+#      - ollama

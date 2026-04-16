@@ -8,16 +8,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-RUN curl -Ls https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+# Create non-root user matching host lucho uid/gid (1000:1000)
+RUN groupadd -g 1000 appuser && useradd -u 1000 -g 1000 -m appuser
+
+# Install uv into a system-wide location
+RUN curl -Ls https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 
 WORKDIR /app
+RUN chown appuser:appuser /app
 
-COPY pyproject.toml ./
+USER appuser
+
+COPY --chown=appuser:appuser pyproject.toml ./
 RUN uv sync --no-dev
 
-COPY src/ src/
+COPY --chown=appuser:appuser src/ src/
 
 EXPOSE 8000
 

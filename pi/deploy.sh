@@ -21,9 +21,9 @@ fi
 # ── 2. Ensure Pi directories exist ───────────────────────────────────────
 
 echo "==> Creating data directories on Pi..."
-ssh "$PI_HOST" "mkdir -p ~/omi/data ~/obsidian"
+ssh "$PI_HOST" "mkdir -p ~/omi/data ~/vault ~/pi"
 
-# ── 3. Copy .env to Pi (reference copy — env_file is read locally by compose) ──
+# ── 3. Copy config files to Pi ───────────────────────────────────────────
 
 if [[ -f "$ENV_FILE" ]]; then
   echo "==> Copying .env to Pi..."
@@ -34,13 +34,16 @@ else
   exit 1
 fi
 
+
 # ── 4. Build and start ────────────────────────────────────────────────────
 
 echo "==> Building and starting service on $PI_HOST..."
 docker --context "$CONTEXT_NAME" compose up -d --build
 
 echo ""
-echo "==> Done. Service running at http://192.168.0.27:8000"
-echo "    Health:  curl http://192.168.0.27:8000/health"
+echo "==> Done."
+echo "    nano-claw:  http://192.168.0.27:8000  (health: curl http://192.168.0.27:8000/health)"
+echo "    corpus-ui:  http://192.168.0.27:8001"
+echo ""
 echo "    Logs:    docker --context $CONTEXT_NAME compose logs -f nano-claw"
-echo "    Tail:    ssh $PI_HOST 'docker logs -f \$(docker ps -qf name=nano-claw)'"
+echo "             docker --context $CONTEXT_NAME compose logs -f corpus-ui"

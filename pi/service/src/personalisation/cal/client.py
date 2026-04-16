@@ -226,7 +226,7 @@ def _create_caldav_event(
         ical.add_component(event)
         cal.save_event(ical.to_ical().decode())
 
-        return f"Event created: {title} on {start.strftime('%Y-%m-%d %H:%M')}"
+        return f"Event created: {title} on {start.strftime('%d/%m/%y %H:%M')}"
     except Exception as exc:
         logger.error(f"CalDAV event creation failed: {exc}")
         return f"Failed to create event: {exc}"

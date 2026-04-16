@@ -1,36 +1,36 @@
 """
-Shared Whisper singleton — import this everywhere instead of defining _get_whisper() locally.
-Uses faster-whisper with CPU int8 quantisation (suitable for Pi 5).
+Transcription via OpenAI Whisper API (whisper-1).
+Requires WHISPER_TOKEN in .env.
 """
 from __future__ import annotations
 
-import asyncio
 import os
 import tempfile
 from pathlib import Path
 
-from faster_whisper import WhisperModel
+import httpx
 
 from .config import settings
 
-_whisper: WhisperModel | None = None
-
-
-def get_model() -> WhisperModel:
-    global _whisper
-    if _whisper is None:
-        _whisper = WhisperModel(settings.whisper_model, device="cpu", compute_type="int8")
-    return _whisper
+_WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions"
 
 
 async def transcribe_file(file_path: str | Path) -> str:
-    """Transcribe an audio/video file. Returns joined segment text."""
-    loop = asyncio.get_event_loop()
-    model = get_model()
-    segments, _ = await loop.run_in_executor(
-        None, lambda: model.transcribe(str(file_path))
-    )
-    return " ".join(s.text.strip() for s in segments).strip()
+    """Transcribe an audio/video file via the OpenAI Whisper API."""
+    if not settings.whisper_token:
+        raise RuntimeError("WHISPER_TOKEN is not set in .env")
+
+    file_path = Path(file_path)
+    async with httpx.AsyncClient(timeout=120) as client:
+        with file_path.open("rb") as f:
+            response = await client.post(
+                _WHISPER_URL,
+                headers={"Authorization": f"Bearer {settings.whisper_token}"},
+                data={"model": "whisper-1"},
+                files={"file": (file_path.name, f, "audio/mpeg")},
+            )
+    response.raise_for_status()
+    return response.json().get("text", "").strip()
 
 
 async def transcribe_bytes(data: bytes, suffix: str = ".wav") -> str:

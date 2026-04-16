@@ -14,6 +14,8 @@ from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s", force=True)
+
 # Suppress noisy third-party loggers
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 logging.getLogger("transformers").setLevel(logging.ERROR)
@@ -27,16 +29,19 @@ class _HealthFilter(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(_HealthFilter())
 
+import corpus
+from corpus.config import CorpusConfig
+from corpus.embeddings.index import add_documents, collection_count, delete_collection
+from corpus.preprocessors import audio as audio_prep
+from corpus.preprocessors import image as image_prep
+from corpus.preprocessors import text as text_prep
+from corpus.preprocessors import video as video_prep
+from corpus.profile.builder import build_profile
+from corpus.storage import append_feedback, list_uploads, load_profile, save_generation, save_upload
+
 from .config import settings
-from .embeddings.index import add_documents, collection_count, delete_collection
-from .preprocessors import audio as audio_prep
-from .preprocessors import image as image_prep
-from .preprocessors import text as text_prep
-from .preprocessors import video as video_prep
-from .profile.builder import build_profile
 from .agents.writer import generate
-from .storage import append_feedback, list_uploads, load_profile, save_generation, save_upload
-from .transcription import get_model as get_whisper_model
+from .transcription import transcribe_file as _transcribe_file
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +70,14 @@ async def _photo_pruner() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    corpus.configure(CorpusConfig(
+        data_dir=settings.data_dir,
+        openai_api_key=settings.whisper_token,
+        embedding_model=settings.embedding_model,
+        anthropic_api_key=settings.anthropic_api_key,
+        generation_model=settings.generation_model,
+    ))
+
     tasks: list[asyncio.Task] = []
     tg_app = None
 
@@ -285,8 +298,7 @@ async def process_audio(user_id: str, file: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
-        segments, _ = get_whisper_model().transcribe(tmp_path)
-        transcript = " ".join(s.text.strip() for s in segments)
+        transcript = await _transcribe_file(tmp_path)
     finally:
         os.unlink(tmp_path)
 
@@ -382,13 +394,7 @@ async def omi_audio_webhook(
         tmp_path = tmp.name
 
     try:
-        segments, _ = get_whisper_model().transcribe(
-            tmp_path,
-            language="en",
-            vad_filter=True,
-            condition_on_previous_text=False,
-        )
-        transcript = " ".join(s.text.strip() for s in segments).strip()
+        transcript = await _transcribe_file(tmp_path)
     finally:
         os.unlink(tmp_path)
 
@@ -468,6 +474,11 @@ async def omi_photo_webhook(user_id: str, request: Request, key: str | None = Qu
     Receives a raw JPEG directly from the glasses over WiFi.
     Firmware posts here after every photo capture — no Omi app or BLE bridge required.
 
+    If OBSIDIAN_VAULT_PATH is configured and vision capture is enabled, the frame
+    is analyzed with Claude Vision. Any readable text (handwritten notes, books,
+    printed pages) is extracted and saved as a Markdown note in the vault under
+    Captures/YYYY-MM-DD/HH-MM <title>.md.
+
     Firmware setting: PI_SERVICE_URL / PI_USER_ID in config.h
     """
     _check_webhook_secret(key)
@@ -478,12 +489,55 @@ async def omi_photo_webhook(user_id: str, request: Request, key: str | None = Qu
     if len(jpeg_bytes) < 100:
         return {"status": "ignored", "reason": "too small"}
 
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    ts_dt = datetime.now(timezone.utc)
+    ts = ts_dt.strftime("%Y%m%d_%H%M%S")
     filename = f"photo_{ts}.jpg"
     await save_upload(user_id, "image", filename, jpeg_bytes)
-    logger.warning("Photo saved: %s (%d bytes)", filename, len(jpeg_bytes))
+    logger.info("Photo saved: %s (%d bytes)", filename, len(jpeg_bytes))
 
-    return {"status": "saved", "filename": filename}
+    # ── Vision capture: extract text and save to Obsidian vault ──────────────
+    capture_note = None
+    if settings.vision_capture_enabled and settings.obsidian_vault_path:
+        from .vision.capture import analyze_photo
+        from . import vault_writer as vw
+
+        result = await analyze_photo(jpeg_bytes, dedup_window_minutes=settings.vision_dedup_minutes)
+        if result is not None:
+            vault = Path(settings.obsidian_vault_path)
+            note_path, created = vw.write_capture_note(
+                vault=vault,
+                title=result.title,
+                content=result.content,
+                capture_type=result.capture_type,
+                timestamp=ts_dt,
+                image_filename=filename,
+            )
+            capture_note = {
+                "note": str(note_path.relative_to(vault)),
+                "title": result.title,
+                "capture_type": result.capture_type,
+                "confidence": round(result.confidence, 2),
+                "created": created,
+            }
+            if settings.telegram_bot_token and settings.telegram_chat_id and created:
+                try:
+                    from telegram import Bot
+                    bot = Bot(token=settings.telegram_bot_token)
+                    preview = result.content[:300].replace("\n", " ") + (
+                        "…" if len(result.content) > 300 else ""
+                    )
+                    await bot.send_message(
+                        chat_id=settings.telegram_chat_id,
+                        text=f"📸 *{result.title}* ({result.capture_type})\n\n{preview}",
+                        parse_mode="Markdown",
+                    )
+                except Exception as exc:
+                    logger.warning("Telegram photo notify failed: %s", exc)
+
+    response: dict = {"status": "saved", "filename": filename}
+    if capture_note:
+        response["capture"] = capture_note
+    return response
 
 
 @app.get("/digest/{date_str}", response_class=HTMLResponse)

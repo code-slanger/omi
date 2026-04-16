@@ -6,8 +6,8 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str
 
-    # Whisper (local, via faster-whisper)
-    whisper_model: str = "base"  # tiny | base | small | medium | large-v3
+    # Whisper (OpenAI API)
+    whisper_token: str = ""  # OpenAI API key for Whisper transcription
 
     # Storage
     storage_backend: str = "local"  # "local" or "s3"
@@ -82,6 +82,14 @@ class Settings(BaseSettings):
     # ── Daily digest ──────────────────────────────────────────────────────────
     # Base URL for digest links in Telegram messages (e.g. http://192.168.0.27:8000)
     digest_base_url: str = ""
+
+    # ── Vision capture (OMI Glasses camera → Obsidian) ────────────────────────
+    # Minimum confidence (0.0–1.0) required to save a captured frame to the vault.
+    vision_min_confidence: float = 0.6
+    # Minutes before the same text content can be saved again (deduplication).
+    vision_dedup_minutes: int = 5
+    # Set to false to disable vision processing of incoming photos entirely.
+    vision_capture_enabled: bool = True
 
 
 settings = Settings()

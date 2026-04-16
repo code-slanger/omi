@@ -3,6 +3,9 @@ name = "personalisation-service"
 version = "0.2.0"
 requires-python = ">=3.11"
 dependencies = [
+    # ── Corpus (shared media ingestion + embeddings + profile) ────────────────
+    "corpus @ ../../corpus",
+
     # ── Core API + web ────────────────────────────────────────────────────────
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -14,18 +17,6 @@ dependencies = [
     "anthropic>=0.40.0",
     "google-generativeai>=0.8.0",   # Gemini — long context summarization
     "httpx>=0.27.0",                # Ollama + GitHub API
-
-    # ── Embeddings + local STT ────────────────────────────────────────────────
-    "faster-whisper>=1.0.0",
-    "chromadb>=0.5.20",
-    "sentence-transformers>=3.3.0",
-    "numpy>=1.26.0",
-    "torch",
-
-    # ── Media preprocessing ───────────────────────────────────────────────────
-    "librosa>=0.10.0",
-    "soundfile>=0.12.0",
-    "Pillow>=11.0.0",
 
     # ── Telegram bot ──────────────────────────────────────────────────────────
     "python-telegram-bot>=21.0",
@@ -54,15 +45,6 @@ s3 = ["boto3>=1.35.0"]
 [tool.uv]
 environments = ["sys_platform == 'linux' and platform_machine == 'aarch64'"]
 
-# Force CPU-only torch — avoids pulling the full NVIDIA CUDA stack (~3GB)
-# which torch defaults to on Linux. The Pi has no GPU so CUDA is useless.
-[tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
 
 [build-system]
 requires = ["hatchling"]

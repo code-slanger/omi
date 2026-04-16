@@ -12,9 +12,10 @@ from pathlib import Path
 
 from watchfiles import awatch, Change
 
+from corpus.embeddings.index import add_documents
+from corpus.preprocessors import text as text_prep
+
 from ..config import settings
-from ..embeddings.index import add_documents
-from ..preprocessors import text as text_prep
 
 logger = logging.getLogger(__name__)
 

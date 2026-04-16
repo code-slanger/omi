@@ -1,8 +1,9 @@
 import anthropic
 
+from corpus.embeddings.retrieval import retrieve
+from corpus.storage import load_profile
+
 from ..config import settings
-from ..embeddings.retrieval import retrieve
-from ..storage import load_profile
 
 
 async def generate(user_id: str, prompt: str) -> str:
