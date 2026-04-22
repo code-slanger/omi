@@ -95,6 +95,8 @@ class FeedsConfig:
 
 
 def _feeds_path() -> Path:
+    if settings.obsidian_vault_path:
+        return Path(settings.obsidian_vault_path) / "config" / "feeds.yaml"
     return Path(settings.data_dir) / "feeds.yaml"
 
 

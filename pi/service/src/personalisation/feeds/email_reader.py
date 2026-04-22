@@ -51,7 +51,7 @@ async def summarize_emails(items: list[EmailItem]) -> str:
     text = "\n\n".join(
         f"From: {e.sender}\nSubject: {e.subject}\n{e.snippet}" for e in items
     )
-    client = get_client("cognitive")
+    client = get_client("summarize")
     try:
         return await client.complete(_SUMMARIZE_SYSTEM, text[:12000], max_tokens=512)
     except Exception as exc:

@@ -675,19 +675,17 @@ source: bot
 """
 
 
-def write_book(
-    vault: Path,
-    query: str,
-) -> tuple[Path, bool, str]:
+def fetch_book_info(query: str) -> dict | None:
+    """Search Google Books and return parsed volumeInfo, or None if not found."""
+    return _google_books_search(query)
+
+
+def write_book_from_info(vault: Path, info: dict) -> tuple[Path, bool, str]:
     """
-    Search Google Books, render a note, and save it to the correct genre folder.
+    Save a book note from pre-fetched volumeInfo dict.
     Returns (path, was_created, summary_message).
     """
-    info = _google_books_search(query)
-    if not info:
-        return vault / "unknown.md", False, f"No results found for '{query}' on Google Books."
-
-    title = info.get("title", query)
+    title = info.get("title", "Unknown")
     authors = info.get("authors", [])
     author = ", ".join(authors)
     raw_categories = info.get("categories", [])
@@ -697,7 +695,6 @@ def write_book(
     pages = info.get("pageCount", 0)
     description = info.get("description", "")[:2000]
 
-    # ISBNs
     isbn10, isbn13 = "", ""
     for id_obj in info.get("industryIdentifiers", []):
         if id_obj["type"] == "ISBN_10":
@@ -705,7 +702,6 @@ def write_book(
         elif id_obj["type"] == "ISBN_13":
             isbn13 = id_obj["identifier"]
 
-    # Cover URL (thumbnail from Google)
     image_links = info.get("imageLinks", {})
     cover_url = image_links.get("thumbnail", image_links.get("smallThumbnail", ""))
 
@@ -742,6 +738,14 @@ def write_book(
         f"Saved to: Art/Books/List/{genre_folder}/{filename}"
     )
     return note_path, True, summary
+
+
+def write_book(vault: Path, query: str) -> tuple[Path, bool, str]:
+    """Search Google Books, render a note, and save it. Returns (path, was_created, summary)."""
+    info = _google_books_search(query)
+    if not info:
+        return vault / "unknown.md", False, f"No results found for '{query}' on Google Books."
+    return write_book_from_info(vault, info)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

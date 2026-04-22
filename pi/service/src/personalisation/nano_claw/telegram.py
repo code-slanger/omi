@@ -57,6 +57,7 @@ TASK_DESC, TASK_LIST, TASK_DATE, TASK_TIME = range(4, 8)
 
 # /book conversation
 BOOK_QUERY = 8
+BOOK_CONFIRM = 17
 
 # /daily conversation
 DAILY_MOOD, DAILY_HABITS, DAILY_GRATEFUL, DAILY_HIGHLIGHT = range(9, 13)
@@ -271,6 +272,11 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         "*Productivity:*\n"
         "`/digest [date]` — link to today's daily digest\n\n"
+
+        "*Feeds:*\n"
+        "`/feeds` — list all RSS feeds\n"
+        "`/addfeed <url> [name] [max]` — add an RSS feed\n"
+        "`/delfeed <name>` — remove an RSS feed\n\n"
 
         "*Media (auto-routed):*\n"
         "🎤 Voice note → transcribed → classified\n"
@@ -543,6 +549,88 @@ async def cmd_getweekly(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await _reply(update, content or "(empty note)")
 
 
+async def cmd_feeds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List all configured RSS feeds."""
+    from ..feeds.config import load as load_feeds
+    cfg = load_feeds()
+    if not cfg.rss:
+        await update.message.reply_text("No RSS feeds configured. Use /addfeed <url> [name] [max]")
+        return
+    lines = ["*RSS Feeds*\n"]
+    for f in cfg.rss:
+        lines.append(f"• *{f.name or f.url}* — max {f.max_items}\n  `{f.url}`")
+    await _reply(update, "\n".join(lines))
+
+
+async def cmd_addfeed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Add an RSS feed: /addfeed <url> [name] [max_items]"""
+    if not context.args:
+        await update.message.reply_text("Usage: `/addfeed <url> [name] [max_items]`", parse_mode="Markdown")
+        return
+
+    from ..feeds.config import _feeds_path, load as load_feeds, RSSSource
+    import yaml
+
+    url = context.args[0]
+    name = context.args[1] if len(context.args) > 1 else url.split("/")[2]
+    max_items = int(context.args[2]) if len(context.args) > 2 and context.args[2].isdigit() else 5
+
+    path = _feeds_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    raw: dict = {}
+    if path.exists():
+        with path.open() as f:
+            raw = yaml.safe_load(f) or {}
+
+    feeds = raw.get("rss") or []
+    if any(f.get("url") == url for f in feeds):
+        await update.message.reply_text(f"Already configured: `{url}`", parse_mode="Markdown")
+        return
+
+    feeds.append({"url": url, "name": name, "summarize": True, "max_items": max_items})
+    raw["rss"] = feeds
+
+    with path.open("w") as f:
+        yaml.dump(raw, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    await update.message.reply_text(f"Added *{name}* (`{url}`, max {max_items})", parse_mode="Markdown")
+
+
+async def cmd_delfeed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove an RSS feed by name: /delfeed <name>"""
+    if not context.args:
+        await update.message.reply_text("Usage: `/delfeed <name>`", parse_mode="Markdown")
+        return
+
+    from ..feeds.config import _feeds_path
+    import yaml
+
+    query = " ".join(context.args).lower()
+    path = _feeds_path()
+    if not path.exists():
+        await update.message.reply_text("No feeds.yaml found.")
+        return
+
+    with path.open() as f:
+        raw = yaml.safe_load(f) or {}
+
+    feeds = raw.get("rss") or []
+    before = len(feeds)
+    feeds = [f for f in feeds if query not in f.get("name", "").lower() and query not in f.get("url", "").lower()]
+
+    if len(feeds) == before:
+        await update.message.reply_text(f"No feed matching '{query}' found.")
+        return
+
+    raw["rss"] = feeds
+    with path.open("w") as f:
+        yaml.dump(raw, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    removed = before - len(feeds)
+    await update.message.reply_text(f"Removed {removed} feed(s) matching '{query}'.")
+
+
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     from corpus.embeddings.index import collection_count
     count = collection_count(settings.nano_claw_user_id)
@@ -796,14 +884,21 @@ async def task_get_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 # ---------------------------------------------------------------------------
 # ConversationHandler — /book
 # ---------------------------------------------------------------------------
-# Flow: query (if no args) → search → done
+# Flow: query (if no args) → search → confirm → save
+
+_BOOK_CONFIRM_KB = ReplyKeyboardMarkup(
+    [["✅ Yes, save it", "🔍 Search again", "❌ Cancel"]],
+    one_time_keyboard=True,
+    resize_keyboard=True,
+)
+
 
 async def book_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Entry point for /book — if args given search immediately."""
     inline = " ".join(context.args) if context.args else ""
     if inline:
         await update.message.reply_text(f"Searching Google Books for _{inline}_...", parse_mode="Markdown")
-        return await _book_search(update, inline)
+        return await _book_search(update, context, inline)
 
     await update.message.reply_text("📚 What book do you want to add? (title, or title + author)")
     return BOOK_QUERY
@@ -812,18 +907,64 @@ async def book_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def book_get_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.message.text.strip()
     await update.message.reply_text(f"Searching Google Books for _{query}_...", parse_mode="Markdown")
-    return await _book_search(update, query)
+    return await _book_search(update, context, query)
 
 
-async def _book_search(update: Update, query: str) -> int:
-    vault_path = settings.obsidian_vault_path
-    if not vault_path:
-        await update.message.reply_text("OBSIDIAN_VAULT_PATH is not configured.")
+async def _book_search(update: Update, context: ContextTypes.DEFAULT_TYPE, query: str) -> int:
+    from .. import vault_writer
+    info = vault_writer.fetch_book_info(query)
+    if not info:
+        await update.message.reply_text(
+            f"No results found for '{query}'. Try a different search?",
+            reply_markup=ReplyKeyboardRemove(),
+        )
         return ConversationHandler.END
 
-    from .. import vault_writer
-    _, _, summary = vault_writer.write_book(Path(vault_path), query)
-    await _reply(update, summary)
+    title = info.get("title", "Unknown")
+    authors = info.get("authors", [])
+    author = ", ".join(authors) if authors else "Unknown"
+    raw_categories = info.get("categories", [])
+    genre = raw_categories[0] if raw_categories else "General"
+    publish_date = info.get("publishedDate", "")
+    pages = info.get("pageCount", 0)
+    description = info.get("description", "")[:300]
+
+    preview = (
+        f"📖 *{title}*\n"
+        f"✍️ {author}\n"
+        f"🏷 {genre}"
+        + (f"\n📅 {publish_date}" if publish_date else "")
+        + (f"  •  {pages}p" if pages else "")
+        + (f"\n\n_{description}…_" if description else "")
+        + "\n\nIs this the right book?"
+    )
+
+    context.user_data["pending_book"] = info
+    await update.message.reply_text(preview, parse_mode="Markdown", reply_markup=_BOOK_CONFIRM_KB)
+    return BOOK_CONFIRM
+
+
+async def book_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+
+    if text == "✅ Yes, save it":
+        vault_path = settings.obsidian_vault_path
+        if not vault_path:
+            await update.message.reply_text("OBSIDIAN_VAULT_PATH is not configured.", reply_markup=ReplyKeyboardRemove())
+            return ConversationHandler.END
+        info = context.user_data.pop("pending_book", {})
+        from .. import vault_writer
+        _, _, summary = vault_writer.write_book_from_info(Path(vault_path), info)
+        await update.message.reply_text(summary, reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
+
+    if text == "🔍 Search again":
+        await update.message.reply_text("What book would you like to search for?", reply_markup=ReplyKeyboardRemove())
+        return BOOK_QUERY
+
+    # Cancel
+    await update.message.reply_text("Cancelled.", reply_markup=ReplyKeyboardRemove())
+    context.user_data.pop("pending_book", None)
     return ConversationHandler.END
 
 
@@ -1301,6 +1442,7 @@ def build_app() -> Application:
         entry_points=[CommandHandler("book", book_start)],
         states={
             BOOK_QUERY: [MessageHandler(filters.TEXT & ~filters.COMMAND, book_get_query)],
+            BOOK_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, book_confirm)],
         },
         fallbacks=[cancel_handler],
         name="book_conv",
@@ -1353,6 +1495,9 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("draft", cmd_draft))
     app.add_handler(CommandHandler("context", cmd_context))
     app.add_handler(CommandHandler("digest", cmd_digest))
+    app.add_handler(CommandHandler("feeds", cmd_feeds))
+    app.add_handler(CommandHandler("addfeed", cmd_addfeed))
+    app.add_handler(CommandHandler("delfeed", cmd_delfeed))
     app.add_handler(CommandHandler("monthly", cmd_monthly))
     app.add_handler(CommandHandler("getdaily", cmd_getdaily))
     app.add_handler(CommandHandler("getweekly", cmd_getweekly))
