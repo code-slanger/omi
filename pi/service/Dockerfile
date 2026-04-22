@@ -19,10 +19,12 @@ RUN chown appuser:appuser /app
 
 USER appuser
 
-COPY --chown=appuser:appuser pyproject.toml ./
+COPY --chown=appuser:appuser corpus /corpus
+COPY --chown=appuser:appuser pi/service/pyproject.toml ./
+RUN sed -i 's|corpus @ [^"]*corpus|corpus @ file:///corpus|g' pyproject.toml
 RUN uv sync --no-dev
 
-COPY --chown=appuser:appuser src/ src/
+COPY --chown=appuser:appuser pi/service/src/ src/
 
 EXPOSE 8000
 

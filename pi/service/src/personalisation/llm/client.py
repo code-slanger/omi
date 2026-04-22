@@ -92,6 +92,9 @@ def get_client(role: str) -> LLMProvider:
     """Return the appropriate LLM provider for the given role."""
     from ..config import settings
 
+    if role == "summarize" and settings.ollama_base_url:
+        return OllamaProvider()
+
     if role == "summarize" and settings.gemini_api_key:
         return GeminiProvider()
 

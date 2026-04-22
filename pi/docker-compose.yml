@@ -1,8 +1,8 @@
 services:
   nano-claw:
     build:
-      context: ./service
-      dockerfile: Dockerfile
+      context: ..                          # omi/ root — corpus/ in scope
+      dockerfile: pi/service/Dockerfile
     ports:
       - "8000:8000"
     env_file:
@@ -73,16 +73,13 @@ volumes:
   caddy_data:
   caddy_config:
 
-# ── Ollama — local LLM server (optional) ──────────────────────────────────
-# Set OLLAMA_BASE_URL=http://ollama:11434 in service/.env to enable.
-# To pull a model after first start:
-#   docker compose exec ollama ollama pull llama3.2
-#  ollama:
-#    image: ollama/ollama:latest
-#    ports:
-#      - "11434:11434"
-#    volumes:
-#      - /home/lucho/ollama/models:/root/.ollama
-#    restart: unless-stopped
-#    profiles:
-#      - ollama
+  # ── Ollama — local LLM for digest summarisation (no API cost) ─────────────
+  # After first deploy, pull the model:
+  #   docker --context lucho compose exec ollama ollama pull llama3.2:1b
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - /home/lucho/ollama/models:/root/.ollama
+    restart: unless-stopped
