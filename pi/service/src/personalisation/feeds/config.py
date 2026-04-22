@@ -110,16 +110,16 @@ def load() -> FeedsConfig:
     cfg = FeedsConfig()
     cfg.digest_time = raw.get("digest_time", "08:00")
 
-    for item in raw.get("rss", []):
+    for item in raw.get("rss") or []:
         cfg.rss.append(RSSSource(**{k: v for k, v in item.items() if k in RSSSource.__dataclass_fields__}))
 
-    for item in raw.get("youtube", []):
+    for item in raw.get("youtube") or []:
         cfg.youtube.append(YouTubeSource(**{k: v for k, v in item.items() if k in YouTubeSource.__dataclass_fields__}))
 
-    for item in raw.get("substack", []):
+    for item in raw.get("substack") or []:
         cfg.substack.append(SubstackSource(**{k: v for k, v in item.items() if k in SubstackSource.__dataclass_fields__}))
 
-    for item in raw.get("github", []):
+    for item in raw.get("github") or []:
         cfg.github.append(GitHubSource(**{k: v for k, v in item.items() if k in GitHubSource.__dataclass_fields__}))
 
     if email_raw := raw.get("email"):

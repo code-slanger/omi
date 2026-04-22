@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     # Base URL for digest links in Telegram messages (e.g. http://192.168.0.27:8000)
     digest_base_url: str = ""
 
+    # Google Books API key (free — avoids shared quota exhaustion)
+    google_books_api_key: str = ""
+
     # ── Vision capture (OMI Glasses camera → Obsidian) ────────────────────────
     # Minimum confidence (0.0–1.0) required to save a captured frame to the vault.
     vision_min_confidence: float = 0.6

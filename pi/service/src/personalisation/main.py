@@ -540,6 +540,14 @@ async def omi_photo_webhook(user_id: str, request: Request, key: str | None = Qu
     return response
 
 
+@app.get("/digest/today", response_class=HTMLResponse)
+async def get_digest_today():
+    """Redirect /digest/today to today's dated digest."""
+    from datetime import date
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/digest/{date.today().isoformat()}")
+
+
 @app.get("/digest/{date_str}", response_class=HTMLResponse)
 async def get_digest(date_str: str):
     """
