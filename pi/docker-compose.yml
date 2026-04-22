@@ -69,10 +69,6 @@ services:
       - radicale
     restart: unless-stopped
 
-volumes:
-  caddy_data:
-  caddy_config:
-
   # ── Ollama — local LLM for digest summarisation (no API cost) ─────────────
   # After first deploy, pull the model:
   #   docker --context lucho compose exec ollama ollama pull llama3.2:1b
@@ -83,3 +79,9 @@ volumes:
     volumes:
       - /home/lucho/ollama/models:/root/.ollama
     restart: unless-stopped
+    profiles:
+      - ollama
+
+volumes:
+  caddy_data:
+  caddy_config:
